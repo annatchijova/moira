@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moira-causal-cuts"
+version = "0.1.0"
+description = "Minimal causal cuts over decision histories: what is the minimal historical evidence required to flip a present decision?"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "Anna Tchijova" }]
+
+[tool.setuptools.packages.find]
+include = ["moira*"]
