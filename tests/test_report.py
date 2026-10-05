@@ -36,8 +36,7 @@ class TestReport(unittest.TestCase):
         a = find_minimal_cuts(oracle, hist)
         text = summary_text(a)
         self.assertIn("'staging is mandatory'", text)
-        self.assertIn("Removing any single tested transition is insufficient",
-                      text)
+        self.assertIn("No single tested removal is sufficient", text)
         self.assertIn("{T17, T23}", text)
         self.assertIn("'staging is optional'", text)
         self.assertIn("All other tested removals preserve it.", text)

@@ -12,7 +12,7 @@ MOIRA — decides how signals aggregate into a verdict.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import FrozenSet, Sequence, Tuple
+from typing import FrozenSet, Optional, Sequence, Tuple
 
 # Hard caps — resource exhaustion guards. A history is caller-supplied input;
 # the cut search is combinatorial in its length.
@@ -87,3 +87,53 @@ def remove(history: Sequence[Transition], indices: FrozenSet[int]) -> History:
     transitions keep their original seq — T17 stays T17 wherever it lands.
     """
     return tuple(t for i, t in enumerate(history) if i not in indices)
+
+
+@dataclass(frozen=True)
+class Edit:
+    """One atomic intervention on a history position.
+
+    action:      "remove" (do(T_i = empty)) or "replace" (do(T_i = T'_i)).
+    replacement: the substitute Transition for action="replace". Its signals
+                 are what the oracle sees; its seq is advisory — reporting
+                 always names the position by the ORIGINAL transition's tid.
+    """
+    position:    int
+    action:      str
+    replacement: Optional["Transition"] = None
+
+    def __post_init__(self) -> None:
+        if self.position < 0:
+            raise ValueError("position must be >= 0")
+        if self.action not in ("remove", "replace"):
+            raise ValueError(f"action must be 'remove' or 'replace', "
+                             f"got {self.action!r}")
+        if self.action == "replace" and not isinstance(
+                self.replacement, Transition):
+            raise ValueError("action='replace' requires a Transition "
+                             "replacement")
+        if self.action == "remove" and self.replacement is not None:
+            raise ValueError("action='remove' takes no replacement")
+
+
+def apply_edits(history: Sequence[Transition],
+                edits: FrozenSet[Edit]) -> History:
+    """do(T = T'): apply a set of edits to a history.
+
+    At most one edit per position (enforced by construction in the searcher;
+    validated here). Removals drop the position; replacements substitute the
+    Transition object wholesale.
+    """
+    positions = [e.position for e in edits]
+    if len(set(positions)) != len(positions):
+        raise ValueError("at most one edit per position")
+    by_pos = {e.position: e for e in edits}
+    out = []
+    for i, t in enumerate(history):
+        e = by_pos.get(i)
+        if e is None:
+            out.append(t)
+        elif e.action == "replace":
+            out.append(e.replacement)
+        # "remove" simply omits the position
+    return tuple(out)

@@ -109,17 +109,56 @@ moira/core/transitions.py    Transition / History / do(T_S = ∅)
 moira/core/oracle.py         Decision + DecisionOracle protocol
 moira/core/cuts.py           minimal causal cut search (the core)
 moira/core/seal.py           SHA-256 sealing over canonical bytes
+moira/core/transitions.py    also: Edit / apply_edits (do(T = T'))
 moira/oracles/hypothesis.py  reference oracle, VIGIA sort key
+moira/bridge/vigia_bundle.py VIGIA sealed bundle -> history + L-036 oracle
 moira/lineage.py             hypothesis lineage: near-misses, pivots, roadmap
 moira/report.py              sealed report + human summary
 ```
 
+## Replacement interventions — `do(T_i = T'_i)`
+
+Beyond removal, MOIRA searches minimal *edit sets*: per position, one removal
+plus caller-supplied mutations via `mutagen(t) -> Iterable[Transition]`.
+A candidate is a set of `Edit`s, at most one per position; minimality and
+the same pruning/budget/honest-coverage rules apply. `remove T17` and
+`replace T17 with X` are distinct minimal interventions — both are
+legitimate counterfactual explanations.
+
+```python
+from moira import find_minimal_interventions
+from moira.core.transitions import Transition
+
+def mutations(t):
+    return [Transition(seq=t.seq, kind=t.kind,
+                       signals=frozenset(t.signals - {"deploy_guard_seen"}),
+                       label=t.label + " (guard stripped)")]
+
+r = find_minimal_interventions(oracle, history, max_size=2, mutagen=mutations)
+print(summary_text(r, history))
+```
+
+## VIGÍA bundle bridge
+
+`moira/bridge/vigia_bundle.py` rebuilds a sealed VIGÍA bundle's signal list
+as a transition history and runs the cut search under `BandCountOracle` — a
+documented reconstruction of VIGÍA's L-036 signal-count gate (primary
+signals: 2× z>3 → MALICIOUS_INTENT_DETECTED; 1× → INTENT_DETECTED;
+2× z>2 → SUSPICION_DETECTED; else UNDETERMINED). If the bundle's recorded
+verdict came from the reasoner layer rather than the gate, the result flags
+`reproduces_recorded=False` — surfaced, not hidden.
+
+```python
+from moira.bridge.vigia_bundle import analyze_bundle
+r = analyze_bundle("path/to/bundle.json")
+```
+
 ## Roadmap
 
-- `do(T_i = T'_i)` replacement interventions, not only removal.
 - Weighted minimality (cost-per-transition cuts, not cardinality).
 - MARCO-style seed-based enumeration for large histories.
-- Bridge: run MOIRA over VIGÍA's sealed bundles (abduction trace as history).
+- Baseline re-run check to detect nondeterministic oracles (RT1-F9).
+- `depended_on` tri-state: distinguish "not tracked" from "used zero" (RT1).
 
 ## License
 

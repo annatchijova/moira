@@ -43,6 +43,27 @@ def _cut_dict(cut) -> dict:
     }
 
 
+def _edit_dict(e) -> dict:
+    return {
+        "position": e.position,
+        "action": e.action,
+        "replacement": (_transition_dict(e.replacement)
+                        if e.replacement is not None else None),
+    }
+
+
+def _intervention_dict(iv) -> dict:
+    return {
+        "positions": sorted(iv.positions),
+        "edits": sorted((_edit_dict(e) for e in iv.edits),
+                        key=lambda d: d["position"]),
+        "alternative_verdict": iv.alternative.verdict,
+        "alternative_token": iv.alternative.token,
+        "alternative_score": (str(iv.alternative.score)
+                              if iv.alternative.score is not None else None),
+    }
+
+
 def _transition_dict(t) -> dict:
     return {
         "seq": t.seq, "kind": t.kind,
@@ -79,7 +100,10 @@ def payload_of(
         },
         "history_len": analysis.history_len,
         "depended_on": analysis.depended_on,
-        "minimal_cuts": [_cut_dict(c) for c in analysis.cuts],
+        "minimal_cuts": ([_intervention_dict(iv) for iv in
+                          analysis.interventions]
+                         if hasattr(analysis, "interventions")
+                         else [_cut_dict(c) for c in analysis.cuts]),
         "critical_positions": sorted(analysis.critical_positions),
         "coverage": {
             "max_cut_size": analysis.coverage.max_cut_size,
@@ -113,7 +137,8 @@ def summary_lines(analysis: CutAnalysis, history: Optional[History] = None) -> L
     """Human-readable counterfactual summary. Every line states a measured
     fact from the analysis; no line speculates."""
     base = analysis.baseline
-    cuts = analysis.cuts
+    interventions = getattr(analysis, "interventions", None)
+    cuts = interventions if interventions is not None else analysis.cuts
     cov = analysis.coverage
 
     if analysis.depended_on is not None:
@@ -147,17 +172,29 @@ def summary_lines(analysis: CutAnalysis, history: Optional[History] = None) -> L
     if not singletons:
         smallest = min(c.size for c in cuts)
         lines.append(
-            f"Removing any single tested transition is insufficient; "
-            f"the smallest decisive cut has size {smallest}."
+            f"No single tested {'edit' if interventions is not None else 'removal'} "
+            f"is sufficient; the smallest decisive cut has size {smallest}."
         )
     for c in cuts:
-        members = "{" + ", ".join(c.tids) + "}"
+        if interventions is not None:
+            if history is None:
+                raise ValueError(
+                    "summary of an intervention search requires the history "
+                    "to name positions")
+            members = "{" + ", ".join(c.describe(history)) + "}"
+            verb = "Applying"
+        else:
+            members = "{" + ", ".join(c.tids) + "}"
+            verb = "Removing"
         lines.append(
-            f"Removing {members} changes the decision to "
+            f"{verb} {members} changes the decision to "
             f"'{c.alternative.verdict}'."
         )
     if cov.exhaustive:
-        lines.append("All other tested removals preserve it.")
+        lines.append(
+            f"All other tested "
+            f"{'interventions' if interventions is not None else 'removals'} "
+            f"preserve it.")
     else:
         lines.append(
             f"Coverage note: removals of size <= {cov.complete_sizes} were "
