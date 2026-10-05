@@ -18,8 +18,14 @@ Schema v2:
   str      -> "s:" + NFC(CRLF/CR -> LF)  (unambiguous prefix + normalization)
   None     -> "null"
   Fraction -> "num/den:frac"
-  dict     -> keys sorted, values recursive
+  dict     -> KEYS CANONICALIZED (RT1-F1: an int key 1 and a str key "1"
+              must not collide; canonical keys are always strings, so the
+              sort is total and mixed-type dicts cannot crash), values
+              recursive
   list     -> elements recursive
+  set/frozenset -> elements canonicalized, then sorted by their canonical
+              JSON encoding (RT1-F2: str(set) is hash-order dependent —
+              same set, two seals across PYTHONHASHSEED values)
 
 Signed zero: -0.0 is normalized via `obj + 0.0` so both zeros canonicalize
 to "0.00000000".
@@ -28,6 +34,7 @@ CANONICALIZE_VERSION = "2"
 """
 from __future__ import annotations
 
+import json
 import unicodedata
 from fractions import Fraction
 from typing import Any
@@ -77,9 +84,23 @@ def _canonicalize_v2(obj: Any) -> Any:
     if isinstance(obj, Fraction):
         return f"{obj.numerator}/{obj.denominator}:frac"
     if isinstance(obj, dict):
-        return {k: _canonicalize_v2(v) for k, v in sorted(obj.items())}
+        # Keys are canonicalized too: the canonical form of every scalar is a
+        # string, so canon keys are uniformly sortable and distinct source
+        # types cannot collide ({1: x} vs {"1": x}).
+        canon_items = sorted(
+            ((_canonicalize_v2(k), _canonicalize_v2(v)) for k, v in obj.items()),
+            key=lambda item: item[0],
+        )
+        return {k: v for k, v in canon_items}
     if isinstance(obj, (list, tuple)):
         return [_canonicalize_v2(v) for v in obj]
+    if isinstance(obj, (set, frozenset)):
+        # str(set) iterates in hash order — nondeterministic across
+        # PYTHONHASHSEED. Order by the canonical JSON of each element.
+        elems = [_canonicalize_v2(v) for v in obj]
+        return sorted(
+            elems, key=lambda c: json.dumps(c, sort_keys=True, ensure_ascii=False)
+        )
     return _V2_STR_PREFIX + _v2_norm_str(str(obj))
 
 

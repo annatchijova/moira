@@ -43,11 +43,34 @@ def _cut_dict(cut) -> dict:
     }
 
 
-def payload_of(analysis: CutAnalysis) -> dict:
+def _transition_dict(t) -> dict:
+    return {
+        "seq": t.seq, "kind": t.kind,
+        "signals": sorted(t.signals), "label": t.label,
+    }
+
+
+def history_fingerprint(history) -> str:
+    """SHA-256 over the canonical form of the full history. Binds a sealed
+    report to the exact input the analysis ran over (RT1-F5): without it a
+    seal proves self-consistency only — the same payload can be presented
+    against a different history."""
+    return seal_payload([_transition_dict(t) for t in history])
+
+
+def payload_of(
+    analysis: CutAnalysis,
+    history: Optional[History] = None,
+    oracle_id: Optional[str] = None,
+) -> dict:
     """The canonical, sealable content of an analysis. No timestamps — the
     seal must be reproducible across runs of identical inputs."""
     return {
         "schema": SCHEMA_VERSION,
+        "history_fingerprint": (
+            history_fingerprint(history) if history is not None else None
+        ),
+        "oracle_id": oracle_id,
         "baseline": {
             "token": analysis.baseline.token,
             "verdict": analysis.baseline.verdict,
@@ -67,16 +90,23 @@ def payload_of(analysis: CutAnalysis) -> dict:
     }
 
 
-def seal_analysis(analysis: CutAnalysis, meta: Optional[dict] = None) -> SealedReport:
-    """Seal the analysis. meta is stored OUTSIDE the seal (provenance)."""
+def seal_analysis(
+    analysis: CutAnalysis,
+    history: Optional[History] = None,
+    oracle_id: Optional[str] = None,
+    meta: Optional[dict] = None,
+) -> SealedReport:
+    """Seal the analysis. meta is stored OUTSIDE the seal (provenance).
+
+    Pass `history` to bind the seal to the exact input analyzed; omit it and
+    the payload records history_fingerprint=null — visible, not hidden.
+    """
     m = {"generated_at": datetime.now(timezone.utc).isoformat()}
     if meta:
         m.update(meta)
-    return SealedReport(
-        sealed_payload=payload_of(analysis),
-        seal=seal_payload(payload_of(analysis)),
-        meta=m,
-    )
+    payload = payload_of(analysis, history, oracle_id)
+    return SealedReport(sealed_payload=payload, seal=seal_payload(payload),
+                        meta=m)
 
 
 def summary_lines(analysis: CutAnalysis, history: Optional[History] = None) -> List[str]:

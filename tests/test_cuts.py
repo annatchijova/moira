@@ -92,6 +92,14 @@ class TestCuts(unittest.TestCase):
         self.assertLess(r.coverage.complete_sizes, 3)
         self.assertEqual(r.coverage.oracle_calls, 40)
 
+    def test_tested_singletons_only_counts_ran(self):
+        # RT1-F3 regression: a position must not be reported as tested if the
+        # oracle never evaluated its removal.
+        hist = [T(i, {f"s{i}"}) for i in range(5)]
+        r = find_minimal_cuts(AndOracle(), hist, oracle_budget=1)
+        self.assertEqual(r.coverage.oracle_calls, 1)   # baseline only
+        self.assertEqual(r.tested_singletons, frozenset())
+
     def test_empty_history(self):
         r = find_minimal_cuts(AndOracle(), [])
         self.assertEqual(r.baseline.verdict, "NOGO")

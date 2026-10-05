@@ -68,7 +68,8 @@ def build_case():
 def main() -> int:
     oracle, history = build_case()
     analysis = find_minimal_cuts(oracle, history, max_cut_size=3)
-    report = seal_analysis(analysis)
+    report = seal_analysis(analysis, history,
+                           oracle_id="HypothesisOracle/vigia-sort-key")
 
     print("=" * 64)
     print("MOIRA — minimal causal cuts")

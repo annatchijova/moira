@@ -42,6 +42,26 @@ class TestCanonicalize(unittest.TestCase):
         payload = {"x": [1, "s", Fraction(3, 7)], "y": {"k": True}}
         self.assertEqual(seal_payload(payload), seal_payload(payload))
 
+    # RT1-F1 regression: dict keys are canonicalized — distinct source types
+    # must not collide in sealed space.
+    def test_dict_key_types_do_not_collide(self):
+        self.assertNotEqual(seal_payload({1: "x"}), seal_payload({"1": "x"}))
+        self.assertNotEqual(seal_payload({True: "x"}),
+                            seal_payload({"true": "x"}))
+
+    # RT1-F4 regression: mixed-type dict keys must not crash the sort.
+    def test_mixed_type_dict_keys(self):
+        canon = canonicalize({1: "a", "b": "c"})
+        self.assertEqual(set(canon.keys()), {"1:int", "s:b"})
+
+    # RT1-F2 regression: set/frozenset canonical form must be hash-order
+    # independent (str(set) is not).
+    def test_frozenset_stable_form(self):
+        a = canonicalize(frozenset({"x", "y", "z"}))
+        b = canonicalize({"z", "x", "y"})
+        self.assertEqual(a, b)
+        self.assertEqual(a, sorted(a))
+
 
 if __name__ == "__main__":
     unittest.main()

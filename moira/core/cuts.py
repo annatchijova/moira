@@ -125,13 +125,19 @@ def find_minimal_cuts(
                 # A strict superset of a known minimal cut cannot be minimal.
                 if any(m <= candidate for m in minimal_sets):
                     continue
-                if size == 1:
-                    tested_singletons.add(combo[0])
                 alt = decide_guarded(remove(hist, candidate))
+                if size == 1:
+                    # Record only after the oracle actually ran: on budget
+                    # exhaustion a position must not be reported as tested.
+                    tested_singletons.add(combo[0])
                 if baseline.flips(alt):
                     minimal.append(CausalCut(
                         positions=candidate,
-                        tids=tuple(sorted(hist[i].tid for i in combo)),
+                        # Numeric seq order, not lexicographic: "T2" before
+                        # "T17", not after "T10".
+                        tids=tuple(hist[i].tid
+                                   for i in sorted(combo,
+                                                   key=lambda i: hist[i].seq)),
                         alternative=alt,
                     ))
                     minimal_sets.append(candidate)

@@ -57,7 +57,7 @@ class TestReport(unittest.TestCase):
 
     def test_sealed_json_shape(self):
         oracle, hist = _staging_case()
-        r = seal_analysis(find_minimal_cuts(oracle, hist))
+        r = seal_analysis(find_minimal_cuts(oracle, hist), hist)
         doc = to_json(r)
         self.assertIn('"seal"', doc)
         self.assertIn('"canonicalize_version": "2"', doc)
