@@ -6,8 +6,10 @@ Repo language: English (code, comments, commits, docs). No emojis.
 
 - **No floats in the decision path.** Scores and costs are `Fraction`.
   Floats may appear only in display formatting, never in a sealed value.
-- **Canonical v2 only.** Everything sealed goes through
-  `moira/core/canonicalize.py`. Do not add a second encoder.
+- **One canonical encoder.** Everything sealed goes through
+  `moira/core/canonicalize.py` (currently schema "3" — a strict superset of
+  VIGIA v2). Do not add a second encoder, and do not change semantics
+  without bumping `CANONICALIZE_VERSION`.
 - **Seal covers payload only.** Timestamps and run metadata go in `meta`,
   outside the seal. Identical inputs must produce identical seals.
 - **Honest coverage.** If the cut search cannot exhaust the bound, report

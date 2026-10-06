@@ -67,8 +67,10 @@ states exactly which cut sizes were fully explored (`complete_sizes`) and
 Inherited invariants from VIGÍA:
 
 - **No floats in the decision path** — scores are `Fraction`.
-- **Canonical v2 serialization** — type-tagged (`1`, `"1"`, `1.0`, `True` are
-  distinct), key-sorted, `CANONICALIZE_VERSION`-stamped.
+- **Canonical serialization (v3)** — type-tagged (`1`, `"1"`, `1.0`, `True`
+  are distinct), dict keys canonicalized, deterministic set ordering,
+  `CANONICALIZE_VERSION`-stamped. Strict superset of VIGIA v2; identical on
+  v2-legal payloads.
 - **SHA-256 seal** over the payload; timestamps and run metadata live outside
   the seal, so identical analyses seal identically.
 - Verified by test: identical seals across runs and across processes with
@@ -104,7 +106,7 @@ python3 -m unittest discover -s tests
 ## Layout
 
 ```
-moira/core/canonicalize.py   canonical v2 serializer (ported, lockstep)
+moira/core/canonicalize.py   canonical serializer v3 (v2 scalars + canon keys + sets)
 moira/core/transitions.py    Transition / History / do(T_S = ∅)
 moira/core/oracle.py         Decision + DecisionOracle protocol
 moira/core/cuts.py           minimal causal cut search (the core)
