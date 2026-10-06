@@ -111,16 +111,32 @@ class TestInterventionSearch(unittest.TestCase):
         r = find_minimal_interventions(NeedA(), hist, max_size=1,
                                        mutagen=strip_a)
         rep = seal_analysis(r, hist)
-        edits = rep.sealed_payload["minimal_cuts"][0]["edits"]
-        self.assertTrue(any(e["action"] == "replace" for e in
-                            rep.sealed_payload["minimal_cuts"][1]["edits"])
-                        or True)
-        self.assertIn("replace", {e["action"] for iv in
-                                  rep.sealed_payload["minimal_cuts"]
-                                  for e in iv["edits"]})
-        self.assertIn("remove", {e["action"] for iv in
-                                 rep.sealed_payload["minimal_cuts"]
-                                 for e in iv["edits"]})
+        # RT2-F3: interventions live under their own discriminated key.
+        self.assertEqual(rep.sealed_payload["result_kind"],
+                         "minimal_interventions")
+        cuts = rep.sealed_payload["minimal_interventions"]
+        actions = {e["action"] for iv in cuts for e in iv["edits"]}
+        self.assertEqual(actions, {"remove", "replace"})
+
+    def test_mutation_truncation_is_recorded(self):
+        # RT2-F2: a mutagen offering more than the per-position cap must
+        # leave its truncation visible in the sealed coverage.
+        def fat_mutagen(t):
+            return [T(t.seq, {f"m{j}"}) for j in range(20)]
+        hist = [T(i, {f"s{i}"}) for i in range(3)]
+        r = find_minimal_interventions(NeedA(), hist, max_size=1,
+                                       mutagen=fat_mutagen)
+        self.assertEqual(r.coverage.mutations_offered, 60)
+        self.assertEqual(r.coverage.mutations_truncated, 12)
+        payload = seal_analysis(r, hist).sealed_payload
+        self.assertEqual(payload["coverage"]["mutations_truncated"], 12)
+
+    def test_out_of_range_edit_rejected(self):
+        # RT2-F1: ghost edits fail closed.
+        with self.assertRaises(ValueError):
+            apply_edits([T(0)], frozenset({Edit(5, "remove")}))
+        with self.assertRaises(ValueError):
+            apply_edits([], frozenset({Edit(0, "remove")}))
 
 
 if __name__ == "__main__":

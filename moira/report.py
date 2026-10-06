@@ -27,7 +27,7 @@ from .core.cuts import CutAnalysis
 from .core.seal import SealedReport, seal_payload
 from .core.transitions import History
 
-SCHEMA_VERSION: str = "moira.report/1"
+SCHEMA_VERSION: str = "moira.report/2"
 
 
 def _cut_dict(cut) -> dict:
@@ -100,16 +100,26 @@ def payload_of(
         },
         "history_len": analysis.history_len,
         "depended_on": analysis.depended_on,
-        "minimal_cuts": ([_intervention_dict(iv) for iv in
-                          analysis.interventions]
-                         if hasattr(analysis, "interventions")
-                         else [_cut_dict(c) for c in analysis.cuts]),
+        # RT2-F3: the result list's shape is discriminated explicitly —
+        # intervention entries carry "edits" (no "tids"); a consumer must
+        # never have to guess which schema minimal_cuts holds.
+        "result_kind": ("minimal_interventions"
+                        if hasattr(analysis, "interventions")
+                        else "minimal_cuts"),
+        **({
+            "minimal_interventions":
+                [_intervention_dict(iv) for iv in analysis.interventions]
+        } if hasattr(analysis, "interventions") else {
+            "minimal_cuts": [_cut_dict(c) for c in analysis.cuts]
+        }),
         "critical_positions": sorted(analysis.critical_positions),
         "coverage": {
             "max_cut_size": analysis.coverage.max_cut_size,
             "complete_sizes": analysis.coverage.complete_sizes,
             "oracle_calls": analysis.coverage.oracle_calls,
             "exhaustive": analysis.coverage.exhaustive,
+            "mutations_offered": analysis.coverage.mutations_offered,
+            "mutations_truncated": analysis.coverage.mutations_truncated,
         },
     }
 

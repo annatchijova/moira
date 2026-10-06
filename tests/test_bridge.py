@@ -47,6 +47,25 @@ class TestHelpers(unittest.TestCase):
                                                         derived=True)]))
         self.assertEqual(len(hist), 1)
 
+    def test_non_dict_signal_fails_closed(self):
+        # RT2-F5: malformed entries must not be silently dropped.
+        bad = bundle([sig(0, 9)])
+        bad["pipeline_results"]["signals"].append("not a dict")
+        with self.assertRaises(ValueError):
+            history_from_bundle(bad)
+
+    def test_malformed_and_absent_z_are_visible(self):
+        # RT2-F4: malformed != measured-low. Both count as non-critical,
+        # but the history must say which is which.
+        b = bundle([sig(0, 1), sig(1, 1), sig(2, 1)])
+        b["pipeline_results"]["signals"][1]["z_score"] = "garbage"
+        del b["pipeline_results"]["signals"][2]["z_score"]
+        hist = history_from_bundle(b)
+        toks = [t.signals for t in hist]
+        self.assertIn("z:low", toks[0])
+        self.assertIn("z:malformed", toks[1])
+        self.assertIn("z:absent", toks[2])
+
 
 class TestBandCount(unittest.TestCase):
 

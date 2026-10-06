@@ -39,32 +39,41 @@ from ..core.transitions import History, Transition
 MAX_SIGNALS_PER_BUNDLE: int = 256
 
 
+def _try_frac(value: Any) -> Optional[Fraction]:
+    """Strict parse of a VIGIA numeric; None when unparseable (RT2-F4:
+    malformed must be distinguishable from a measured 0)."""
+    try:
+        if isinstance(value, dict) and value.get("__fraction__"):
+            return Fraction(int(value.get("num", 0)),
+                            max(int(value.get("den", 1)), 1))
+        if isinstance(value, Fraction):
+            return value
+        if isinstance(value, bool):
+            return Fraction(int(value), 1)
+        if isinstance(value, int):
+            return Fraction(value, 1)
+        if isinstance(value, float):
+            if value != value or value in (float("inf"), float("-inf")):
+                return None
+            return Fraction(str(value))
+        if isinstance(value, str):
+            s = value.strip()
+            if s.lower() in ("", "nan", "inf", "-inf", "+inf",
+                             "infinity", "-infinity"):
+                return None
+            return Fraction(s)
+    except (ValueError, ZeroDivisionError, TypeError):
+        return None
+    return None
+
+
 def _to_frac(value: Any) -> Fraction:
     """Parse a VIGIA numeric: tagged {__fraction__}, int, float, or "n/d" str.
-    Deterministic; never produces a float. Mirrors vigia_agent._to_frac."""
-    if isinstance(value, dict) and value.get("__fraction__"):
-        return Fraction(int(value.get("num", 0)),
-                        max(int(value.get("den", 1)), 1))
-    if isinstance(value, Fraction):
-        return value
-    if isinstance(value, bool):
-        return Fraction(int(value), 1)
-    if isinstance(value, int):
-        return Fraction(value, 1)
-    if isinstance(value, float):
-        if value != value or value in (float("inf"), float("-inf")):
-            return Fraction(0, 1)
-        return Fraction(str(value))
-    if isinstance(value, str):
-        s = value.strip()
-        if s.lower() in ("", "nan", "inf", "-inf", "+inf",
-                         "infinity", "-infinity"):
-            return Fraction(0, 1)
-        try:
-            return Fraction(s)
-        except (ValueError, ZeroDivisionError):
-            return Fraction(0, 1)
-    return Fraction(0, 1)
+    Deterministic; never produces a float. Mirrors vigia_agent._to_frac.
+    Unparseable input maps to 0 — callers needing to distinguish malformed
+    from measured-zero should use _try_frac."""
+    parsed = _try_frac(value)
+    return parsed if parsed is not None else Fraction(0, 1)
 
 
 def _is_primary(signal: Dict[str, Any]) -> bool:
@@ -94,14 +103,26 @@ def history_from_bundle(bundle: Dict[str, Any]) -> History:
     hist = []
     for i, s in enumerate(signals):
         if not isinstance(s, dict):
-            continue
+            # RT2-F5: a malformed entry must not vanish silently — a dropped
+            # signal changes the denominator of the gate.
+            raise ValueError(
+                f"signals[{i}] is not a dict "
+                f"({type(s).__name__}) — malformed bundle")
         if not _is_primary(s):
             continue   # derived/unanalyzed signals are not evidence (N4/F5)
+        # RT2-F4: distinguish absent/unparseable z_score from a measured
+        # low value. Numerically identical to z:low (counts toward neither
+        # critical nor high) but observable in the history.
+        if "z_score" not in s:
+            z_tok = "z:absent"
+        else:
+            z = _try_frac(s["z_score"])
+            z_tok = "z:malformed" if z is None else _z_band(z)
         toks = {
             f"id:{s.get('artifact_id', f'sig_{i}')}",
             f"src:{s.get('source', s.get('tool', 'unknown'))}",
             f"type:{s.get('evidence_type', 'unknown')}",
-            _z_band(_to_frac(s.get("z_score", 0))),
+            z_tok,
         }
         hist.append(Transition(
             seq=i, kind=str(s.get("evidence_type", "signal")),

@@ -61,11 +61,13 @@ class CausalCut:
 @dataclass(frozen=True)
 class Coverage:
     """Exactly what was tested — the honest claim about completeness."""
-    max_cut_size:     int                # requested bound
-    complete_sizes:   int                # all sizes 1..k fully explored
-    oracle_calls:     int
-    exhaustive:       bool               # every subset up to bound was tested
-    elapsed_seconds:  Fraction
+    max_cut_size:        int                # requested bound
+    complete_sizes:      int                # all sizes 1..k fully explored
+    oracle_calls:        int
+    exhaustive:          bool               # every subset up to bound was tested
+    elapsed_seconds:     Fraction
+    mutations_offered:   Optional[int] = None  # total mutagen output (interventions)
+    mutations_truncated: Optional[int] = None  # dropped by the per-position cap
 
 
 @dataclass(frozen=True)
@@ -106,7 +108,10 @@ class MinimalIntervention:
             if e.action == "remove":
                 parts.append(f"remove {tid}")
             else:
-                label = e.replacement.label or str(e.replacement.signals)
+                # sorted() — str(frozenset) is hash-order dependent, and this
+                # text can end up in an unsealed report (RT2-F6).
+                label = (e.replacement.label
+                         or "{" + ", ".join(sorted(e.replacement.signals)) + "}")
                 parts.append(f"replace {tid} with '{label}'")
         return tuple(parts)
 
@@ -242,14 +247,21 @@ def find_minimal_interventions(
     if oracle_budget < 1:
         raise ValueError("oracle_budget must be >= 1")
 
-    # Per-position action menus, computed once.
+    # Per-position action menus, computed once. The per-position cap on
+    # mutations is recorded — a truncated menu must be visible in coverage,
+    # never silently smaller (RT2-F2).
     menus: List[List[Edit]] = []
+    mutations_offered = 0
+    mutations_truncated = 0
     for i, t in enumerate(hist):
         acts = [Edit(position=i, action="remove")]
         if mutagen is not None:
-            mutations = list(mutagen(t))[:MAX_MUTATIONS_PER_POSITION]
+            all_mutations = list(mutagen(t))
+            mutations_offered += len(all_mutations)
+            truncated = all_mutations[:MAX_MUTATIONS_PER_POSITION]
+            mutations_truncated += len(all_mutations) - len(truncated)
             acts += [Edit(position=i, action="replace", replacement=m)
-                     for m in mutations]
+                     for m in truncated]
         menus.append(acts)
 
     calls = 0
@@ -305,5 +317,7 @@ def find_minimal_interventions(
             oracle_calls=calls,
             exhaustive=exhaustive,
             elapsed_seconds=elapsed,
+            mutations_offered=mutations_offered,
+            mutations_truncated=mutations_truncated,
         ),
     )

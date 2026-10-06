@@ -127,6 +127,13 @@ def apply_edits(history: Sequence[Transition],
     positions = [e.position for e in edits]
     if len(set(positions)) != len(positions):
         raise ValueError("at most one edit per position")
+    for p in positions:
+        if not (0 <= p < len(history)):
+            # RT2: an out-of-range edit would silently no-op — a ghost edit
+            # counted as applied. Fail closed at the boundary.
+            raise ValueError(
+                f"edit position {p} out of range for history of "
+                f"{len(history)} transitions")
     by_pos = {e.position: e for e in edits}
     out = []
     for i, t in enumerate(history):

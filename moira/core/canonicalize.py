@@ -30,7 +30,14 @@ Schema v2:
 Signed zero: -0.0 is normalized via `obj + 0.0` so both zeros canonicalize
 to "0.00000000".
 
-CANONICALIZE_VERSION = "2"
+Version note (RT2-F7): MOIRA's encoder is a strict superset of VIGIA v2 —
+identical scalar tags, plus canonical dict keys and deterministic set
+ordering. It is stamped "3" because a payload containing non-str keys or
+sets encodes differently (and is now representable); stamping "2" would
+falsely claim lockstep with VIGIA's v2, which leaves keys raw and has no
+set rule. For all VIGIA-v2-legal payloads the two encodings agree.
+
+CANONICALIZE_VERSION = "3"
 """
 from __future__ import annotations
 
@@ -39,7 +46,7 @@ import unicodedata
 from fractions import Fraction
 from typing import Any
 
-CANONICALIZE_VERSION: str = "2"
+CANONICALIZE_VERSION: str = "3"
 
 # Unambiguous prefix for strings — prevents "true"/"1:int"/"null" from
 # colliding with a scalar's tag. Any prefix works as long as no scalar

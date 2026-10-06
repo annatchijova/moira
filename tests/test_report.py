@@ -59,7 +59,7 @@ class TestReport(unittest.TestCase):
         r = seal_analysis(find_minimal_cuts(oracle, hist), hist)
         doc = to_json(r)
         self.assertIn('"seal"', doc)
-        self.assertIn('"canonicalize_version": "2"', doc)
+        self.assertIn('"canonicalize_version": "3"', doc)
         self.assertIn('"exhaustive": true', doc)
 
 

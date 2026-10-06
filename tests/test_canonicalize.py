@@ -11,7 +11,9 @@ from moira.core.seal import seal_payload
 class TestCanonicalize(unittest.TestCase):
 
     def test_version(self):
-        self.assertEqual(CANONICALIZE_VERSION, "2")
+        # Strict superset of VIGIA v2 — divergent semantics get a divergent
+        # stamp (RT2-F7).
+        self.assertEqual(CANONICALIZE_VERSION, "3")
 
     def test_type_tags_are_distinct(self):
         # The collisions v2 exists to close: 1, "1", 1.0, True, "true", None
